@@ -445,6 +445,7 @@ def generate_parser_methods(var gen: ParserGenerator)
 def get_rule_type(var gen: ParserGenerator; rule: Rule): TypeDeclPtr
     match rule
         if [[Rule nonterminal = $v(nonterm)]]
+            // TODO: check for leaks
             var inscope type_ := gen.rule_types[nonterm]
             return <- type_
 
@@ -471,7 +472,7 @@ def set_rule_handle(var subrule_: Rule_?; handle: string)
         if [[Rule nonterminal = $v(nonterm)]]
             unsafe // Moving values that contain smart pointers is generally unsafe
                    // But here we know that the contained variant is nonterminal (string) and cannot
-                   // possibly contain valid smart pointer. Thereforу it should be safe to overwrite it.
+                   // possibly contain valid smart pointer. Therefore it should be safe to overwrite it.
                 subrule_.rule <- [[Rule bound_nonterminal = [[auto nonterm, handle]]]]
                 return
 
@@ -646,6 +647,8 @@ def generate(var gen: ParserGenerator; var rule_: Rule): array<ExpressionPtr>
             var result_handle = rule_.name
             var inscope rule_code <- gen |> generate(rule_.rule)
             var inscope type_decl <- gen |> get_rule_type(rule_.rule)
+
+            // TODO: check leaks
             var inscope return_type := gen.return_types[gen.current_context]
 
             if rule_.name == "" // Rule not bound by name, discard result
