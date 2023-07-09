@@ -281,8 +281,10 @@ def generate(var gen: ParserGenerator; var def_: Definition)
         $b(function_body)
         return <- [[$t(return_type)]]
 
-    //fun |> describe |> print
+    // XXX: disabling locks for the entire function
     fun.moreFlags |= MoreFunctionFlags skipLockCheck
+
+    //fun |> describe |> print
     compiling_module() |> add_function(fun)
 
     if rule_left_recursive(def_.name, def_.rule)
@@ -529,7 +531,7 @@ def generate(var gen: ParserGenerator; var rule_: Rule): array<ExpressionPtr>
             let count = "{gen.rule_counter[name]}"
 
             // Type of the function that we are now generating code for
-            var inscope return_type := gen.return_types[gen.current_context]
+            var inscope return_type <- gen.return_types[gen.current_context] |> clone_type
 
             // varname is a generic name for unnamed nonterminals
             // e.g. add4, add5, mul0
@@ -547,7 +549,7 @@ def generate(var gen: ParserGenerator; var rule_: Rule): array<ExpressionPtr>
             let name = nonterm._0
             let result_name = nonterm._1
 
-            var inscope return_type := gen.return_types[gen.current_context]
+            var inscope return_type <- gen.return_types[gen.current_context] |> clone_type
 
             let count = "{gen.rule_counter[name]}"
             let varname = "{name}{count}"
@@ -621,14 +623,62 @@ def generate(var gen: ParserGenerator; var rule_: Rule): array<ExpressionPtr>
 
             return <- flatten_block(t as ExprBlock)
 
+        if [[Rule not_rule = $v(rule_)]]
+
+            var inscope return_type <- gen.return_types[gen.current_context] |> clone_type
+
+            var inscope rule_code <- gen |> with_context("__PEEK__") <|
+                return <- gen |> generate(rule_.rule)
+
+            var inscope epilogue <- qmacro_block <|
+                return true
+
+            for e in flatten_block(epilogue as ExprBlock)
+                rule_code |> emplace <| e
+
+            var inscope t <- qmacro_block <|
+                var mark = parser.index
+
+                var success = invoke <|
+                    $b(rule_code)
+
+                parser.index = mark
+                return <- [[$t(return_type)]] if success
+
+            return <- flatten_block(t as ExprBlock)
+
+        if [[Rule and_rule = $v(rule_)]]
+
+            var inscope return_type <- gen.return_types[gen.current_context] |> clone_type
+
+            var inscope rule_code <- gen |> with_context("__PEEK__") <|
+                return <- gen |> generate(rule_.rule)
+
+            var inscope epilogue <- qmacro_block <|
+                return true
+
+            for e in flatten_block(epilogue as ExprBlock)
+                rule_code |> emplace <| e
+
+            var inscope t <- qmacro_block <|
+                var mark = parser.index
+
+                var success = invoke <|
+                    $b(rule_code)
+
+                parser.index = mark
+                return <- [[$t(return_type)]] if !success
+
+            return <- flatten_block(t as ExprBlock)
+
+
         if [[Rule repeat = $v(rule_)]]
 
             var result_handle = rule_.name
             var inscope rule_code <- gen |> generate(rule_.rule)
             var inscope type_decl <- gen |> get_rule_type(rule_.rule)
 
-            // TODO: check leaks
-            var inscope return_type := gen.return_types[gen.current_context]
+            var inscope return_type <- gen.return_types[gen.current_context] |> clone_type
 
             if rule_.name == "" // Rule not bound by name, discard result
                 var inscope t <- qmacro_block <|
@@ -689,15 +739,19 @@ def generate(var gen: ParserGenerator; var rule_: Rule): array<ExpressionPtr>
 
             return <- flatten_block(t as ExprBlock)
 
+
     abort("Unreachable")
     return <- [[array<ExpressionPtr>]]
 
 
 def with_context(var gen: ParserGenerator; context: string; block_)
     //! Invokes a block of code in the generator context
+
     let last_context = gen.current_context
     gen.current_context = context
+
     var inscope r <- invoke(block_)
+
     gen.current_context = last_context
     return <- r
 
@@ -733,7 +787,7 @@ def alternative_add_epilogue(var block_contents: array<ExpressionPtr>; var gen: 
     var inscope return_type <- gen.return_types[gen.current_context] |> clone_type()
 
     var inscope t <- qmacro_block <|
-        var val: $t(action_type) -const <- invoke <| $(): $t(action_type) -const
+        var val: $t(action_type) <- invoke <| $(): $t(action_type)
             $b(action_block)
 
         // For some reason I cannot directly return [[Result]]
@@ -745,13 +799,11 @@ def alternative_add_epilogue(var block_contents: array<ExpressionPtr>; var gen: 
 
 
 def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): ExpressionPtr
-    // TODO: check for leaks
-    var inscope return_type := gen.return_types[gen.current_context]
+    var inscope return_type <- gen.return_types[gen.current_context] |> clone_type()
 
     match terminal
         if [[Terminal lit = $v(l) ]]
-            var l1 : string := l
-            var precomputed_length = length(l1)
+            var precomputed_length = l |> length
 
             return <- qmacro_block <|
                 return <- [[$t(return_type)]] if !parser |> matches($v(l), $v(precomputed_length))

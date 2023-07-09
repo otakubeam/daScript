@@ -120,6 +120,18 @@ def into_rule_(var expr: ExpressionPtr): Rule_?
         var subrule = (expr as ExprCall).arguments[0] |> into_rule_
         return <- new [[Rule_ rule <- [[Rule option = subrule ]]]]
 
+    elif expr is ExprCall && (expr as ExprCall).name == "PEEK"
+        // Lookahead rule (PEEK) -- match the rule without advancing
+
+        var subrule = (expr as ExprCall).arguments[0] |> into_rule_
+        return <- new [[Rule_ rule <- [[Rule and_rule = subrule ]]]]
+
+    elif expr is ExprOp1 && (expr as ExprOp1).op == "!"
+        // Negaitve Lookahead rule (!) -- assert unable to match the rule, without advancing
+
+        var subrule = (expr as ExprCall).arguments[0] |> into_rule_
+        return <- new [[Rule_ rule <- [[Rule not_rule = subrule ]]]]
+
     elif expr is ExprOp1 && (expr as ExprOp1).op == "+"
         abort("TODO: Unreachable +")
         // Several (+) -- one or more
