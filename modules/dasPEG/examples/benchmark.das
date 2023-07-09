@@ -4,7 +4,6 @@ require daslib/strings_boost
 require daslib/fio
 require dastest/testing_boost
 require daslib/utf8_utils
-require daslib/json
 require peg/peg
 
 options stack = 1000000000
@@ -14,20 +13,15 @@ options stack = 1000000000
 def main
     var input <- fopen("canada.json", "r") |> fread
 
-    // for i in range(0, 100)
-    //     var discard_errors: string
-    //     print("{i}\n")
-    //     read_json(input, discard_errors)
+    profile(10, "PEG json") <|
+        var parser <- get_parser_with(input)
+        // var res_json <- parse_JsonValue(parser).value
+        print("{intptr(unsafe(addr(parser)))}")
 
-    var parser <- get_parser_with(input)
-    var res_json <- parse_JsonValue(parser).value
-    print("Hello {res_json |> write_json}\n")
-
-    // var discard_error: string
-    // var json <- read_json(input, discard_error)
-    // json |> write_json()
-
-    //verify( == , "Not equal")
+    // profile(10, "std json") <|
+    //     var discard_error: string
+    //     var json <- read_json(input, discard_error)
+    //     print("{intptr(unsafe(addr(json)))}")
 
 
 [test]
@@ -40,25 +34,16 @@ def test1(t: T?)
     var discard_error: string
     var json <- read_json(input, discard_error)
 
-    t |> equal(json |> write_json(), res_json |> write_json)
+    t |> equal(json |> write_json, res_json |> write_json)
 
 
-
+[skip_lock_check]
 def into_table(var src: array<tuple<auto(K); auto(V)>>): table<K; V>
     var result: table<K; V>
     for elem in src
         result[elem._0] <- elem._1
     return <- result
 
-
-def iota
-    return <- generator<int>() <|
-        var i: int = 0
-        while true
-            i += 1
-            return false if i == 0 else yield i
-
-var i = 0
 
 def get_parser_with(input: string): jsonParser
     parse json
@@ -90,8 +75,6 @@ def get_parser_with(input: string): jsonParser
         // If items are present (not []), then no trailing comma is allowed
 
         rule("[", WS, MB(ElementList) as list, "]", WS) <|
-            print("Array {i}\n")
-            i += 1
             return <- [[array<JsonValue?>]] if list |> empty
             return <- list[0] // Take the value from optional
 
@@ -119,7 +102,6 @@ def get_parser_with(input: string): jsonParser
         var Object: table<string; JsonValue?>
 
         rule("\{", WS, MB(MappingList) as list, "\}", WS) <|
-            print("Object\n")
             var empty: table<string; JsonValue?>
             return <- empty if list |> empty
             return <- list[0] |> into_table
