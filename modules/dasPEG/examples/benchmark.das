@@ -1,4 +1,4 @@
-//require daslib/profiler
+// require daslib/profiler
 require daslib/json
 require daslib/strings_boost
 require daslib/fio
@@ -15,8 +15,8 @@ def main
 
     profile(10, "PEG json") <|
         var parser <- get_parser_with(input)
-        // var res_json <- parse_JsonValue(parser).value
-        print("{intptr(unsafe(addr(parser)))}")
+        var res_json <- parse_JsonValue(parser).value
+        print("{intptr(unsafe(addr(res_json)))}")
 
     // profile(10, "std json") <|
     //     var discard_error: string

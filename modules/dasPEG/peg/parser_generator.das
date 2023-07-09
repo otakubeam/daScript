@@ -312,7 +312,7 @@ def generate_grammar(var gen: ParserGenerator; var gram: array<Definition>; name
 
 def generate_parser_methods(var gen: ParserGenerator)
     var inscope eof <- qmacro_function("reached_EOF") <| $(var parser: $t(gen.parser_type)): bool
-        return parser |> get_current_char == -1
+        return parser.input |> length <= parser.index
 
     var inscope skip_whitespace <- qmacro_function("skip_whitespace") <| $(var parser: $t(gen.parser_type))
         while parser |> get_current_char |> is_white_space
@@ -463,7 +463,7 @@ def set_rule_handle(var subrule_: Rule_?; handle: string)
                     // Something like (*"123" as foo)
                     abort("Matchint repeated literals is not allowed")
 
-                if [[Terminal range_ = $v(r) ]]
+                if [[Terminal charset = $v(r) ]]
                     // *[1-9] as numbers -- should be possible
                     abort("Matchint repeated literals is not allowed")
 
@@ -603,12 +603,10 @@ def generate(var gen: ParserGenerator; var rule_: Rule): array<ExpressionPtr>
             var inscope rule_code <- gen |> with_context("__repetition__") <|
                 return <- gen |> generate(rule_.rule)
 
-            var inscope epilogue <- qmacro_block <|
-                $i(result_handle) |> emplace <| temp_name
-                return <- [[$t(make_default_type_decl())]]
-
-            for e in flatten_block(epilogue as ExprBlock)
-                rule_code |> emplace <| e
+            rule_code |> append_block <| ( qmacro_block <| {
+                $i(result_handle) |> emplace <| temp_name;
+                return <- [[$t(make_default_type_decl())]];
+            } )
 
             var inscope t <- qmacro_block <|
                 var $i(result_handle) : array<$t(type_decl)>
@@ -808,10 +806,35 @@ def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): Express
             return <- qmacro_block <|
                 return <- [[$t(return_type)]] if !parser |> matches($v(l), $v(precomputed_length))
 
-        if [[Terminal range_ = $v(r) ]]
+        if [[Terminal charset = $v(ranges) ]]
+
+            // Get the currect charachter from the stream
+
+            var inscope rule_code: array<ExpressionPtr>;
+
+            rule_code |> append_block <| ( qmacro_block <| {
+                let current_char = parser |> get_current_char;
+            } )
+
+            // Check in it is inside any of the ranges
+
+            for r in ranges
+                rule_code |> append_range(r)
+
+            // Otherwise return false
+
+            rule_code |> append_block <| ( qmacro_block <| {
+                return false;
+            } )
 
             return <- qmacro_block <|
-                return [[$t(return_type)]] if !parser |> in_range($v(r))
+                var success = invoke <|
+                    $b(rule_code)
+
+                return <- [[$t(return_type)]] if !success
+
+                parser.index += 1
+
 
         if [[Terminal number = $v(handle)]]
 
@@ -848,3 +871,19 @@ def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): Express
 
     abort("Unreachable")
     return <- [[ExpressionPtr]]
+
+
+def append_range(var rule_code; r)
+    if r._0 == r._1
+        rule_code |> append_block <| ( qmacro_block <| {
+            return true if current_char == $v(r._0);
+        } )
+    else
+        rule_code |> append_block <| ( qmacro_block <| {
+            return true if current_char >= $v(r._0) && current_char <= $v(r._1);
+        } )
+
+
+def append_block(var old: array<ExpressionPtr>; var new_code: ExpressionPtr)
+    for e in flatten_block(new_code as ExprBlock)
+        old |> emplace <| e

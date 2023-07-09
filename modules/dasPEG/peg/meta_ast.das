@@ -24,8 +24,8 @@ variant Terminal
     // Literal: "Hello world"
     lit: string 
 
-    // Range: [0-9]
-    range_: tuple<int; int> 
+    // Range: set('0'..'9', 'a'..'z')
+    charset: array<tuple<int; int>>
 
     // Name of the result (int)
     number: string
