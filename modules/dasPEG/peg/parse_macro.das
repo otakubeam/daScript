@@ -11,6 +11,7 @@ require daslib/strings_boost
 require daslib/macro_boost
 require daslib/ast_boost
 require daslib/defer
+require daslib/match
 
 require peg/parser_generator
 require peg/meta_ast
@@ -27,7 +28,7 @@ struct MacroRule
 [macro_function]
 def add_alternative(var rules: array<MacroRule>; var expr: ExprCall?; prog: ProgramPtr)
     // macro_verify(expr.name |> string() == "rule", prog, expr.at, "parsing rules alternatives should be called with `rule` name")
-    (rules |> back).alternatives |> emplace <| expr
+    (rules |> back).alternatives |> push <| expr
 
 
 [macro_function]
@@ -95,7 +96,7 @@ def into_rule_(var expr: ExpressionPtr): Rule_?
         var inscope t <- [[Rule option <- subrule]]
         return <- new [[Rule_ rule <- t, name <- as_expr.name |> string()]]
 
-    elif expr is ExprAsVariant && ((expr as ExprAsVariant).value is ExprPtr2Ref)
+    elif expr is ExprAsVariant && (expr as ExprAsVariant).value is ExprPtr2Ref
         var as_expr <- expr as ExprAsVariant
 
         var subrule = (as_expr.value as ExprPtr2Ref).subexpr |> into_rule_
@@ -103,7 +104,7 @@ def into_rule_(var expr: ExpressionPtr): Rule_?
         return <- new [[Rule_ rule <- [[Rule maybe_repeat <- subrule ]]]]
 
 
-    elif expr is ExprAsVariant && ((expr as ExprAsVariant).value is ExprStringBuilder)
+    elif expr is ExprAsVariant && (expr as ExprAsVariant).value is ExprStringBuilder
         var as_expr <- expr as ExprAsVariant
         var subrule = (as_expr.value as ExprStringBuilder).elements[0] |> into_rule_
         subrule.name := as_expr.name
@@ -119,7 +120,6 @@ def into_rule_(var expr: ExpressionPtr): Rule_?
 
         var rule: Rule_? <- into_rule_(as_expr.value)
         rule.name = as_expr.name |> string()
-        //print("{rule}\n")
         return <- rule
 
 
