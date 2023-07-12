@@ -271,9 +271,13 @@ def get_rule_type(var gen: ParserGenerator; rule: Rule): TypeDeclPtr
         if [[Rule nonterminal = $v(nonterm)]]
             return <- gen.rule_types[nonterm] |> clone_type
 
+        if [[Rule bound_nonterminal = $v(nonterm)]]
+            return <- gen.rule_types[nonterm._0] |> clone_type
+
         if [[Rule subrule = $v(subrule)]]
             abort("Infer subrule type")
 
+    print("{rule}\n")
     abort("Unreachable `get_rule_type`")
     return <- [[TypeDeclPtr]]
 
@@ -620,11 +624,12 @@ def with_context(var gen: ParserGenerator; context: string; block_)
 
 
 def generate_one_alternative(var gen: ParserGenerator; var alt: Alternative; var i)
-    let block_name = "blk_{i}"
-    let parse_pos = "pos_{i}"
     let result  = "res_{i}"
+    let parse_pos = "pos_{i}"
+    let fun_name = "_parse{gen.current_context}_alt_{i}"
 
     var inscope action <- alt.action
+    var inscope result_type <- gen.return_types[gen.current_context] |> clone_type
     var inscope action_block <- action as ExprBlock |> flatten_block
     var inscope block_contents <- gen |> generate(alt.rule.rule)
 
@@ -632,16 +637,19 @@ def generate_one_alternative(var gen: ParserGenerator; var alt: Alternative; var
 
     block_contents |> alternative_add_epilogue(gen, action_block)
 
+    // Separate alternatives to save stack space
+
+    var inscope alt_fun <- qmacro_function(fun_name) <| $ (var parser: $t(gen.parser_type)): $t(result_type)
+        $b(block_contents)
+
+    compiling_module() |> add_function <| alt_fun
+
     // Generate the alternative
 
     return <- qmacro_block <|
         var parse_pos = parser.index
-
-        var $i(result) <- invoke <|
-            $b(block_contents)
-
+        var $i(result) <- $c(fun_name)(parser)
         return <- $i(result) if $i(result).success
-
         parser.index = parse_pos
 
 
