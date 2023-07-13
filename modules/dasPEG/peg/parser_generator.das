@@ -18,8 +18,6 @@ require daslib/templates_boost
 require peg/meta_ast
 require detail/helpers
 
-options log
-
 struct ParserGenerator
     // Provides information to generate unique names
     rule_counter: table<string; int>
@@ -367,6 +365,7 @@ def generate(var gen: ParserGenerator; var rule_: Rule): array<ExpressionPtr>
                 var $i(varname) <- $c(parse_fun)(parser)
                 if !$i(varname).success
                     return_skip_lockcheck <| [[$t(return_type)]]
+                    return <- [[$t(return_type)]]
 
             return <- flatten_block(t as ExprBlock)
 
@@ -383,8 +382,8 @@ def generate(var gen: ParserGenerator; var rule_: Rule): array<ExpressionPtr>
             var inscope t <- qmacro_block <|
                 var $i(varname) <- $c(parse_fun)(parser)
                 if !$i(varname).success
+                    return_skip_lockcheck <| [[$t(return_type)]]
                     return <- [[$t(return_type)]]
-                    // return_skip_lockcheck <| [[$t(return_type)]]
                 var $i(result_name) <- $i(varname).value
 
             return <- flatten_block(t as ExprBlock)
@@ -450,6 +449,7 @@ def generate_maybe_repeat(var gen: ParserGenerator; var rule_: Rule_?): array<Ex
 
         rule_code |> append_block_new <| (qmacro_block <| {
             return_skip_lockcheck <| [[auto true, 0, parser.index]];
+            return <- [[auto true, 0, parser.index]];
         })
 
         var inscope t <- qmacro_block <|
@@ -471,6 +471,7 @@ def generate_maybe_repeat(var gen: ParserGenerator; var rule_: Rule_?): array<Ex
     rule_code |> append_block_new <| (qmacro_block <| {
         $i(result_handle) |> emplace <| temp_name;
         return_skip_lockcheck <| [[auto false, 0, 0]];
+        return <- [[auto false, 0, 0]];
     })
 
     var inscope t <- qmacro_block <|
@@ -492,6 +493,7 @@ def generate_not(var gen: ParserGenerator; var rule_: Rule_?): array<ExpressionP
 
     rule_code |> append_block_new <| (qmacro_block <| {
         return_skip_lockcheck <| [[auto true, 0, parser.index]];
+        return <- [[auto false, 0, parser.index]];
     })
 
     var inscope t <- qmacro_block <|
@@ -501,6 +503,7 @@ def generate_not(var gen: ParserGenerator; var rule_: Rule_?): array<ExpressionP
         parser.index = mark
         if success.success
             return_skip_lockcheck <| [[$t(return_type)]]
+            return <- [[$t(return_type)]]
 
     return <- flatten_block(t as ExprBlock)
 
@@ -513,6 +516,7 @@ def generate_and(var gen: ParserGenerator; var rule_: Rule_?): array<ExpressionP
 
     rule_code |> append_block_new <| (qmacro_block <| {
         return_skip_lockcheck <| [[auto true, 0, parser.index]];
+        return <- [[auto false, 0, parser.index]];
     })
 
     var inscope t <- qmacro_block <|
@@ -522,6 +526,7 @@ def generate_and(var gen: ParserGenerator; var rule_: Rule_?): array<ExpressionP
         parser.index = mark
         if !success.success
             return_skip_lockcheck <| [[$t(return_type)]]
+            return <- [[$t(return_type)]]
 
     return <- flatten_block(t as ExprBlock)
 
@@ -537,6 +542,7 @@ def generate_repeat(var gen: ParserGenerator; var rule_: Rule_?): array<Expressi
 
         rule_code |> append_block_new <| (qmacro_block <| {
             return_skip_lockcheck <| [[auto true, 0, parser.index]];
+            return <- [[auto false, 0, parser.index]];
         })
 
         var inscope t <- qmacro_block <|
@@ -545,6 +551,7 @@ def generate_repeat(var gen: ParserGenerator; var rule_: Rule_?): array<Expressi
 
             if !$i(first_result_name).success
                 return_skip_lockcheck <| [[$t(return_type)]]
+                return <- [[$t(return_type)]]
 
             while true
                 var res <- invoke <|
@@ -562,6 +569,7 @@ def generate_repeat(var gen: ParserGenerator; var rule_: Rule_?): array<Expressi
     rule_code |> append_block_new <| (qmacro_block <| {
         $i(result_handle) |> emplace <| temp_name;
         return_skip_lockcheck <| [[auto true, 0, parser.index]];
+        return <- [[auto false, 0, parser.index]];
     })
 
     var inscope type_decl <- gen |> get_rule_type(rule_.rule)
@@ -573,6 +581,7 @@ def generate_repeat(var gen: ParserGenerator; var rule_: Rule_?): array<Expressi
 
         if !$i(first_result_name).success
             return_skip_lockcheck <| [[$t(return_type)]]
+            return <- [[$t(return_type)]]
 
         $i(result_handle) |> emplace <| ($i(first_result_name).value)
 
@@ -596,6 +605,7 @@ def generate_option(var gen: ParserGenerator; var rule_: Rule_?): array<Expressi
             invoke <|
                 $b(rule_code)
                 return_skip_lockcheck <| [[auto false, 0, 0]]
+                return <- [[auto false, 0, 0]]
 
         return <- flatten_block(t as ExprBlock)
 
@@ -611,6 +621,7 @@ def generate_option(var gen: ParserGenerator; var rule_: Rule_?): array<Expressi
     rule_code |> append_block_new <| (qmacro_block <| {
         $i(result_handle) |> emplace <| temp_name;
         return_skip_lockcheck <| [[auto false, 0, 0]];
+        return <- [[auto false, 0, 0]];
     })
 
     var inscope t <- qmacro_block <|
@@ -655,6 +666,8 @@ def generate_one_alternative(var gen: ParserGenerator; var alt: Alternative; var
 
         if $i(result).success
             return_skip_lockcheck($i(result))
+            return <- $i(result)
+
 
         parser.index = parse_pos
 
@@ -670,6 +683,7 @@ def alternative_add_epilogue(var block_contents: array<ExpressionPtr>; var gen: 
         // For some reason I cannot directly return [[Result]]
         var result: $t(return_type) <- [[$t(return_type) true, val, parser.index]]
         return_skip_lockcheck <| result
+        return <- result
 
     block_contents |> append_block_contents <| t
 
@@ -684,6 +698,7 @@ def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): Express
             return <- qmacro_block <|
                 if !parser |> matches($v(l), $v(precomputed_length))
                     return_skip_lockcheck <| [[$t(return_type)]]
+                    return <- [[$t(return_type)]]
 
         if [[Terminal charset = $v(ranges) ]]
 
@@ -704,7 +719,9 @@ def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): Express
             return <- qmacro_block <|
                 var success = invoke <|
                     $b(rule_code)
-                return_skip_lockcheck <| [[$t(return_type)]] if !success
+                if !success
+                    return_skip_lockcheck <| [[$t(return_type)]]
+                    return <- [[$t(return_type)]]
                 parser.index += 1
 
         if [[Terminal number = $v(handle)]]
@@ -712,8 +729,8 @@ def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): Express
             return <- qmacro_block <|
                 var res : tuple<bool;int;int> = parser |> match_decimal_literal
                 if !res._0
-                    // return <- [[$t(return_type)]]
                     return_skip_lockcheck <| [[$t(return_type)]]
+                    return <- [[$t(return_type)]]
                 var $i(handle) = res._1
 
         if [[Terminal whitespace = _]]
@@ -726,12 +743,14 @@ def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): Express
             return <- qmacro_block <|
                 if !parser |> reached_EOF
                     return_skip_lockcheck <| [[$t(return_type)]]
+                    return <- [[$t(return_type)]]
 
         if [[Terminal any = _]]
 
             return <- qmacro_block <|
                 if parser |> reached_EOF
                     return_skip_lockcheck <| [[$t(return_type)]]
+                    return <- [[$t(return_type)]]
                 parser.index += 1
 
 
@@ -741,6 +760,7 @@ def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): Express
                 var res <- parser |> match_string_literal
                 if !res.success
                     return_skip_lockcheck <| [[$t(return_type)]]
+                    return <- [[$t(return_type)]]
                 var $i(handle) : string = res._1
 
         if [[Terminal double_ = $v(handle)]]
@@ -749,6 +769,7 @@ def generate_terminal(var gen: ParserGenerator; var terminal: Terminal): Express
                 var res <- parser |> match_double_literal
                 if !res.success
                     return_skip_lockcheck <| [[$t(return_type)]]
+                    return <- [[$t(return_type)]]
                 var $i(handle) = res._1
 
 
