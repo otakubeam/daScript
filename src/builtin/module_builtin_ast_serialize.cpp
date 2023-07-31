@@ -124,6 +124,9 @@ namespace das {
         if ( writing ) {
             bool inThisModule = func->module == thisModule;
             *this << inThisModule;
+            if ( func->module->name == "$" && func->name == "empty" ) {
+                __debugbreak();
+            }
             if ( !inThisModule ) {
                 *this << func->module->name;
                 string mangeldName = func->getMangledName();
