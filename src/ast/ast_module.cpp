@@ -4,6 +4,7 @@
 #include "daScript/ast/ast_visitor.h"
 
 #include <atomic>
+#include "signal.h"
 
 namespace das {
 
@@ -25,6 +26,30 @@ namespace das {
         program->visit(subs,/*visitGenerics =*/true);
     }
 
+    struct NormalizeOptionTypes : Visitor {
+        static void run ( ProgramPtr program ) {
+            NormalizeOptionTypes vis;
+            program->visit(vis,/*visitGenerics =*/true);
+        }
+
+        virtual void preVisit ( TypeDecl * td ) {
+            if ( !td ) return;
+            if ( !td->baseType == option ) return;
+
+            for ( size_t i=0, is=td->argTypes.size(); i!=is; ++i ) {
+                auto & TT = td->argTypes[i];
+                TT->ref             = TT->ref            || td->ref;
+                TT->constant        = TT->constant       || td->constant;
+                TT->temporary       = TT->temporary      || td->temporary;
+                TT->removeConstant  = TT->removeConstant || td->removeConstant;
+                TT->removeDim       = TT->removeDim      || td->removeDim;
+                TT->removeRef       = TT->removeRef      || td->removeRef;
+                TT->explicitConst   = TT->explicitConst  || td->explicitConst;
+                TT->explicitRef     = TT->explicitRef    || td->explicitRef;
+                TT->implicit        = TT->implicit       || td->implicit;
+            }
+        }
+    };
 
     DAS_THREAD_LOCAL unsigned ModuleKarma = 0;
 
@@ -438,9 +463,6 @@ namespace das {
 
     bool Module::addGeneric ( const FunctionPtr & fn, bool canFail ) {
         fn->module = this;
-        if ( fn->name == "empty" ) {
-            __debugbreak();
-        }
         auto mangledName = fn->getMangledName();
         fn->module = nullptr;
         if ( generics.insert(mangledName, fn) ) {
@@ -516,6 +538,7 @@ namespace das {
         ownFileInfo = access->letGoOfFileInfo(modName);
         DAS_ASSERTF(ownFileInfo,"something went wrong and FileInfo for builtin module can not be obtained");
         if ( program ) {
+            NormalizeOptionTypes::run (program);
             if (program->failed()) {
                 for (auto & err : program->errors) {
                     issues << reportError(err.at, err.what, err.extra, err.fixme, err.cerr);
