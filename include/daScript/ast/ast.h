@@ -778,7 +778,7 @@ namespace das
             result = td;
             return this;
         }
-        Function * getOrigin() const;
+        FunctionPtr getOrigin() const;
         void serialize ( AstSerializer & ser );
     public:
         AnnotationList      annotations;
