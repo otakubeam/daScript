@@ -377,6 +377,7 @@ namespace das
     struct ExprCallFunc;
 
     struct FunctionAnnotation : Annotation {
+        FunctionAnnotation ( ) = default;
         FunctionAnnotation ( const string & n ) : Annotation(n) {}
         virtual bool rtti_isFunctionAnnotation() const override { return true; }
         virtual bool apply ( const FunctionPtr & func, ModuleGroup & libGroup,
@@ -508,9 +509,7 @@ namespace das
         // familiar patterns
         virtual bool isYetAnotherVectorTemplate() const { return false; }   // has [], there is length(x), data is linear in memory
         // factory
-
         virtual void * factory () const { return nullptr; }
-        ANNOTATION_DECLARE_SERIALIZABLE ( TypeAnnotation )
     };
 
     struct StructureAnnotation : Annotation {
@@ -950,7 +949,8 @@ namespace das
         virtual bool aotInfix ( TextWriter &, const ExpressionPtr & ) { return false; }
         virtual bool aotNeedTypeInfo ( const ExpressionPtr & ) const { return false; }
         virtual bool noAot ( const ExpressionPtr & ) const { return false; }
-        void serialize ( AstSerializer & ser );
+        virtual const char * getFactoryTag () { return "TypeInfoMacro"; }
+        virtual void serialize ( AstSerializer & ser );
         string name;
         Module * module = nullptr;
     };
@@ -1210,7 +1210,8 @@ namespace das
     struct PassMacro : ptr_ref_count {
         PassMacro ( const string na = "" ) : name(na) {}
         virtual bool apply( Program *, Module * ) { return false; }
-        void serialize ( AstSerializer & ser );
+        virtual const char * getFactoryTag () { return "PassMacro"; }
+        virtual void serialize ( AstSerializer & ser );
         string name;
     };
 
@@ -1220,7 +1221,8 @@ namespace das
         virtual bool accept ( Program *, Module *, ExprReader *, int, const LineInfo & ) { return false; }
         virtual ExpressionPtr visit (  Program *, Module *, ExprReader * ) { return nullptr; }
         virtual void seal( Module * m ) { module = m; }
-        void serialize ( AstSerializer & ser );
+        virtual const char * getFactoryTag () { return "ReaderMacro"; }
+        virtual void serialize ( AstSerializer & ser );
         string name;
         Module * module = nullptr;
     };
@@ -1233,7 +1235,8 @@ namespace das
         virtual void seal( Module * m ) { module = m; }
         virtual bool canVisitArguments ( ExprCallMacro *, int ) { return true; }
         virtual bool canFoldReturnResult ( ExprCallMacro * ) { return true; }
-        void serialize ( AstSerializer & ser );
+        virtual const char * getFactoryTag () { return "CallMacro"; }
+        virtual void serialize ( AstSerializer & ser );
         string name;
         Module * module = nullptr;
     };
@@ -1242,7 +1245,8 @@ namespace das
     struct ForLoopMacro : ptr_ref_count {
         ForLoopMacro ( const string & na = "" ) : name(na) {}
         virtual ExpressionPtr visit ( Program *, Module *, ExprFor * ) { return nullptr; }
-        void serialize ( AstSerializer & ser );
+        virtual const char * getFactoryTag () { return "ForLoopMacro"; }
+        virtual void serialize ( AstSerializer & ser );
         string name;
     };
 
@@ -1250,7 +1254,8 @@ namespace das
         CaptureMacro ( const string & na = "" ) : name(na) {}
         virtual ExpressionPtr captureExpression ( Program *, Module *, Expression *, TypeDecl * ) { return nullptr; }
         virtual void captureFunction ( Program *, Module *, Structure *, Function * ) { }
-        void serialize ( AstSerializer & ser );
+        virtual const char * getFactoryTag () { return "CaptureMacro"; }
+        virtual void serialize ( AstSerializer & ser );
         string name;
     };
 
@@ -1262,7 +1267,8 @@ namespace das
         virtual ExpressionPtr visitIs     (  Program *, Module *, ExprIsVariant * ) { return nullptr; }
         virtual ExpressionPtr visitAs     (  Program *, Module *, ExprAsVariant * ) { return nullptr; }
         virtual ExpressionPtr visitSafeAs (  Program *, Module *, ExprSafeAsVariant * ) { return nullptr; }
-        void serialize ( AstSerializer & ser );
+        virtual const char * getFactoryTag () { return "VariantMacro"; }
+        virtual void serialize ( AstSerializer & ser );
         string name;
     };
 
@@ -1270,7 +1276,8 @@ namespace das
         SimulateMacro ( const string na = "" ) : name(na) {}
         virtual bool preSimulate ( Program *, Context * ) { return true; }
         virtual bool simulate ( Program *, Context * ) { return true; }
-        void serialize ( AstSerializer & ser );
+        virtual const char * getFactoryTag () { return "SimulateMacro"; }
+        virtual void serialize ( AstSerializer & ser );
         string name;
     };
 
@@ -1385,6 +1392,7 @@ namespace das
         virtual void afterEnumeration ( const char * name, const LineInfo & at ) = 0;
         virtual void beforeAlias ( const LineInfo & at ) = 0;
         virtual void afterAlias ( const char * name, const LineInfo & at ) = 0;
+        virtual const char * getFactoryTag () { return "CommentReader"; }
     };
 
     class Program : public ptr_ref_count {
