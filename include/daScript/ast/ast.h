@@ -20,8 +20,16 @@
 #define DAS_THREAD_SAFE_ANNOTATIONS    1
 #endif
 
+#define REGISTER_ANNOTATION_FACTORY( _name )                         \
+static AnnotationPtr create_ ## _name() { return make_smart<_name>(); }  \
+inline static bool _name ## _creator_registered =                 \
+                        AnnotationFactory::registerCreator(# _name,  \
+                                                             create_ ## _name)
+
 namespace das
 {
+    class AnnotationFactory;
+
     class Function;
     typedef smart_ptr<Function> FunctionPtr;
 
@@ -410,7 +418,7 @@ namespace das
         virtual bool isCompatible ( const FunctionPtr &, const vector<TypeDeclPtr> &, const AnnotationDeclaration &, string &  ) const { return true; }
         virtual bool isSpecialized() const { return false; }
         virtual void appendToMangledName( const FunctionPtr &, const AnnotationDeclaration &, string & /* mangledName */ ) const { }
-        void serialize ( AstSerializer & ser );
+        REGISTER_ANNOTATION_FACTORY( FunctionAnnotation );
     };
 
     struct TransformFunctionAnnotation : FunctionAnnotation {
@@ -428,7 +436,7 @@ namespace das
         virtual bool finalize ( ExprBlock *, ModuleGroup &, const AnnotationArgumentList &, const AnnotationArgumentList &, string & ) override {
             return false;
         }
-        void serialize ( AstSerializer & ser );
+        // REGISTER_ANNOTATION_FACTORY( TransformFunctionAnnotation );
     };
 
     struct TypeAnnotation : Annotation {
@@ -505,9 +513,10 @@ namespace das
         // familiar patterns
         virtual bool isYetAnotherVectorTemplate() const { return false; }   // has [], there is length(x), data is linear in memory
         // factory
+
         virtual void * factory () const { return nullptr; }
-        // serialization
         void serialize ( AstSerializer & ser );
+        // REGISTER_ANNOTATION_FACTORY( TypeAnnotation );
     };
 
     struct StructureAnnotation : Annotation {
@@ -1167,6 +1176,7 @@ namespace das
         virtual ~ModuleLibrary() {};
         void addBuiltInModule ();
         bool addModule ( Module * module );
+        void MyXXXoperation( Module * module ) { modules[1] = module; }
         void foreach ( const callable<bool (Module * module)> & func, const string & name ) const;
         void foreach_in_order ( const callable<bool (Module * module)> & func, Module * thisM ) const;
         vector<TypeDeclPtr> findAlias ( const string & name, Module * inWhichModule ) const;
@@ -1601,10 +1611,11 @@ namespace das
         bool                writing = false;
         size_t              readOffset = 0;
         vector<uint8_t>     buffer;
-        das_hash_map<void*, Enumeration*>       enumMap;
+        das_hash_map<void*, Module*>            moduleMap;
         das_hash_map<void*, Variable*>          variableMap;
         das_hash_map<void*, Structure*>         structureMap;
         das_hash_map<void*, CallMacro*>         callMacroMap;
+        das_hash_map<void*, Enumeration*>       enumerationMap;
         das_hash_map<void*, TypeAnnotation*>    typeAnnotationMap;
         das_hash_map<void*, TypeInfoMacro*>     typeInfoMacroMap;
         das_hash_map<uint64_t, TypeAnnotationPtr>   smartTypeAnnotationMap;
@@ -1625,6 +1636,7 @@ namespace das
         das_hash_map<uint64_t, ExpressionPtr>       exprMap;
         vector<pair<ExprBlock **,uint64_t>>         blockRefs;
         vector<pair<ExprClone **,uint64_t>>         cloneRefs;
+        vector<pair<string, Module **>>             moduleRefs;
         vector<pair<Structure::FieldDeclaration **,uint64_t>>  fieldDeclRefs;
         AstSerializer ( const vector<uint8_t> & from );
         AstSerializer ( void );
@@ -1700,11 +1712,12 @@ namespace das
 
         template <typename TT>
         AstSerializer & operator << ( vector<TT> & value ) {
+            tag("Vector");
             if ( writing ) {
-                uint32_t size = (uint32_t) value.size();
+                uint64_t size = value.size();
                 *this << size;
             } else {
-                uint32_t size = 0;
+                uint64_t size = 0;
                 *this << size;
                 value.resize(size);
             }
@@ -1716,16 +1729,18 @@ namespace das
 
         template <typename K, typename V, typename H, typename E>
         void serialize_hash_map ( das_hash_map<K, V, H, E> & value ) {
+            tag("DasHashmap");
             if ( writing ) {
-                auto size = value.size(); *this << size;
+                uint64_t size = value.size(); *this << size;
                 for ( auto & item : value ) {
                     *this << item.first << item.second;
                 }
+                return;
             }
-            uint32_t size = 0; *this << size;
+            uint64_t size = 0; *this << size;
             das_hash_map<K, V, H, E> deser;
             deser.reserve(size);
-            for ( size_t i = 0; i < size; i++ ) {
+            for ( uint64_t i = 0; i < size; i++ ) {
                 K k; V v;
                 *this << k << v;
                 deser.emplace(std::move(k), std::move(v));
@@ -1747,6 +1762,7 @@ namespace das
 
         template <typename V>
         AstSerializer & operator << ( safebox<V> & box ) {
+            tag("Safebox");
             if ( writing ) {
                 uint64_t size = box.unlocked_size(); *this << size;
                 box.foreach_with_hash ([&](smart_ptr<V> obj, uint64_t hash) {
@@ -1756,7 +1772,7 @@ namespace das
             }
             uint64_t size = 0; *this << size;
             safebox<V> deser;
-            for ( size_t i = 0; i < size; i++ ) {
+            for ( uint64_t i = 0; i < size; i++ ) {
                 smart_ptr<V> obj; uint64_t hash;
                 *this << hash << obj;
                 deser.insert(hash, obj);
@@ -1769,17 +1785,17 @@ namespace das
         AstSerializer & operator << ( das_set<TT> & value ) {
             tag("DasSet");
             if ( writing ) {
-                size_t size = value.size();
+                uint64_t size = value.size();
                 *this << size;
                 for ( auto & item : value ) {
                     *this << item;
                 }
                 return *this;
             }
-            size_t size = 0; *this << size;
+            uint64_t size = 0; *this << size;
             das_set<TT> deser;
             deser.reserve(size);
-            for ( size_t i = 0; i < size; i++ ) {
+            for ( uint64_t i = 0; i < size; i++ ) {
                 TT v; *this << v;
                 deser.emplace(std::move(v));
             }
@@ -1799,6 +1815,19 @@ namespace das
             }
         }
     };
+
+    class AnnotationFactory {
+    public:
+        static bool registerCreator( const char* type, AnnotationPtr (*creator)() ) {
+            map[string(type)] = creator;
+        }
+        static AnnotationPtr create( string type ) {
+            return map[type]();
+        }
+    private:
+        inline static das_hash_map<string, AnnotationPtr (*)() > map;
+    };
+
 }
 
 
