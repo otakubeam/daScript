@@ -81,6 +81,15 @@ def main
             let pos = float3(sin(O),cos(O),0.)
             sid_pcm |> set_position(pos)
             sleep(10u)
+        print("set play position\n")
+        sid_pcm |> set_playback_position(0ul)
+        sleep(3000u)
+        print("set play position\n")
+        sid_pcm |> set_playback_position(0ul)
+        sleep(3000u)
+        print("set play position\n")
+        sid_pcm |> set_playback_position(0ul)
+        sleep(3000u)
 
     with_audio_system <|
         print("testing stream\n")
@@ -121,6 +130,15 @@ def main
             let pan = sin(2.*PI*float(t)/float(150))
             sid_pcm |> set_pan(pan)
             sleep(10u)
+        print("set play position\n")
+        sid_pcm |> set_playback_position(0ul)
+        sleep(3000u)
+        print("set play position\n")
+        sid_pcm |> set_playback_position(0ul)
+        sleep(3000u)
+        print("set play position\n")
+        sid_pcm |> set_playback_position(0ul)
+        sleep(3000u)
 
     with_audio_system <|
         print("testing mp3 from pcm, decoded\n")
@@ -134,6 +152,9 @@ def main
                 sound_data <- samples
         print("{length(sound_data)} samples, {channels} channels, {rate} rate\n")
         let sid_pcm = play_sound_from_pcm(MA_SAMPLE_RATE,channels,sound_data)
+        sleep(3000u)
+        print("seek to 20 sec")
+        sid_pcm |> set_playback_position(44100ul * 20ul)
         sleep(3000u)
 
     with_audio_system <|
@@ -154,6 +175,9 @@ def main
         sid |> set_pause(false)
         sid |> set_volume(0.25, 1.0)
         sleep(1000u)
+        print("seek to 20 sec")
+        sid |> set_playback_position(44100ul * 20ul)
+        sleep(3000u)
         print("stop\n")
         sid |> stop(0.5)
         sleep(1000u)
