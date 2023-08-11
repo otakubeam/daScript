@@ -511,7 +511,6 @@ namespace das {
         ownFileInfo = access->letGoOfFileInfo(modName);
         DAS_ASSERTF(ownFileInfo,"something went wrong and FileInfo for builtin module can not be obtained");
         if ( program ) {
-            NormalizeOptionTypes::run(program);
             if (program->failed()) {
                 for (auto & err : program->errors) {
                     issues << reportError(err.at, err.what, err.extra, err.fixme, err.cerr);
