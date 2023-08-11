@@ -1115,6 +1115,7 @@ namespace das
                 bool    isModule : 1;
                 bool    isSolidContext : 1;
                 bool    doNotAllowUnsafe : 1;
+                bool    wasParsedNameless : 1;
             };
             uint32_t        moduleFlags = 0;
         };

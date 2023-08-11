@@ -6,13 +6,13 @@ namespace das {
     struct ForReading {};
 
     struct AstSerializer {
+        ~AstSerializer ();
         AstSerializer ( void );
         AstSerializer ( ForReading, vector<uint8_t> && buffer_ );
 
         AstSerializer ( const AstSerializer & from ) = delete;
         AstSerializer & operator = ( const AstSerializer & from ) = delete;
 
-        FileAccess *        fileAccess = nullptr;
         ModuleLibrary *     moduleLibrary = nullptr;
         Module *            thisModule = nullptr;
         Module *            astModule = nullptr;
@@ -21,6 +21,7 @@ namespace das {
         vector<uint8_t>     buffer;
     // pointers
         das_hash_map<uint64_t, ExprBlock*>          exprBlockMap;
+        das_hash_map<uint64_t, FileInfo*>           fileInfoMap;
     // smart pointers
         das_hash_map<uint64_t, MakeFieldDeclPtr>    smartMakeFieldDeclMap;
         das_hash_map<uint64_t, EnumerationPtr>      smartEnumerationMap;

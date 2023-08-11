@@ -17,6 +17,25 @@ namespace das {
         writing = true;
     }
 
+    AstSerializer::~AstSerializer () {
+        if ( writing ) {
+            return;
+        }
+    // gather modules to delete
+        vector<Module*> modules_to_delete;
+        moduleLibrary->foreach([&]( Module * m ) {
+            if (!m->builtIn || m->promoted)
+                modules_to_delete.push_back(m);
+            return true;
+        }, "*");
+        modules_to_delete.pop_back(); // the Program is itself responsible for deleting its module
+    // delete modules
+        for ( auto m : modules_to_delete ) {
+            m->builtIn = false; // created manually, don't care about flags
+            delete m;
+        }
+    }
+
     // Mnemonic: TT*[old_addr] <- objects[old_addr]
     template <typename TT>
     void patchRefs ( vector<pair<TT**,uint64_t>> & refs, const das_hash_map<uint64_t,smart_ptr<TT>> & objects) {
@@ -165,6 +184,11 @@ namespace das {
                 } else {
                     func = funcModule->findGeneric(mangledName).get();
                 }
+                if ( func == nullptr && funcModule->wasParsedNameless ) {
+                    string modname, funcname;
+                    splitTypeName(mangledName, modname, funcname);
+                    func = funcModule->findFunction(funcname).get();
+                }
                 DAS_VERIFYF(func!=nullptr, "function '%s' is not found", mangledName.c_str());
             }
         }
@@ -294,7 +318,7 @@ namespace das {
 
     AstSerializer & AstSerializer::operator << ( FunctionPtr & func ) {
         tag("FunctionPtr");
-        if ( writing ) {
+        if ( writing && func ) {
             DAS_ASSERTF(!func->builtIn, "cannot serialize built-in function");
         }
         serializeSmartPtr(func, smartFunctionMap);
@@ -542,31 +566,35 @@ namespace das {
     }
 
     AstSerializer & AstSerializer::operator << ( FileInfoPtr & info ) {
-        // TODO: talk about it; FileInfo points to somewhere else
-        return *this;
-
+        tag("FileInfoPtr");
         bool is_null = info == nullptr;
         *this << is_null;
+        if ( is_null ) {
+            if ( !writing ) { info = nullptr; }
+            return *this;
+        }
         if ( writing ) {
-            if ( !is_null ) {
+            uint64_t ptr = (uint64_t) info.get();
+            *this << ptr;
+            if ( fileInfoMap[ptr] == nullptr ) {
+                fileInfoMap[ptr] = info.get();
                 info->serialize(*this);
             }
         } else {
-            if ( !is_null ) {
+            uint64_t ptr; *this << ptr;
+            if ( fileInfoMap[ptr] == nullptr ) {
                 int tag = 0; *this << tag;
                 switch ( tag ) {
                     case 0: info.reset(new FileInfo); break;
                     case 1: info.reset(new TextFileInfo); break;
                     default: DAS_VERIFYF(false, "Unreachable");
                 }
+                fileInfoMap[ptr] = info.get();
                 info->serialize(*this);
-            } else {
-                info = nullptr;
             }
         }
         return *this;
     }
-
 
     AstSerializer & AstSerializer::operator << ( StructurePtr & struct_ ) {
         serializeSmartPtr(struct_, smartStructureMap);
@@ -655,7 +683,7 @@ namespace das {
     AstSerializer & AstSerializer::operator << ( TypeAnnotation * & type_anno ) {
         TypeAnnotationPtr t = type_anno;
         *this << t;
-        type_anno = t.orphan();
+        type_anno = t.get();
         return *this;
     }
 
@@ -1007,8 +1035,7 @@ namespace das {
     void ExprField::serialize ( AstSerializer & ser ) {
         ser.tag("ExprField");
         Expression::serialize(ser);
-        ser << value << name << atField
-            // Note: `field` is const, save it for later backpatching
+        ser << value      << name       << atField
             << fieldIndex << annotation << derefFlags
             // Note: underClone is only used during infer and we don't need it
             << fieldFlags;
@@ -1306,17 +1333,27 @@ namespace das {
     }
 
     void FileInfo::serialize ( AstSerializer & ser ) {
-        ser.tag("FileInfo");
         int tag = 0;
-        ser << tag << name << tabSize;
+        if ( ser.writing ) {
+            ser << tag;
+        }
+        ser << name << tabSize;
         // Note: we do not serialize profileData
     }
 
     void TextFileInfo::serialize ( AstSerializer & ser ) {
-        ser.tag("TextFileInfo");
         int tag = 1; // Signify the text file info
-        ser << tag    << name        << tabSize;
-        ser << source << sourceLength << owner;
+        if ( ser.writing ) {
+            ser << tag;
+        }
+        ser << name         << tabSize;
+        ser << sourceLength << owner;
+        if ( ser.writing ) {
+            ser.write((const void *) source, sourceLength);
+        } else {
+            source = (char *) das_aligned_alloc16(sourceLength + 1);
+            ser.read((void *) source, sourceLength);
+        }
     }
 
     AstSerializer & AstSerializer::operator << ( CallMacro * & ptr ) {
@@ -1346,6 +1383,7 @@ namespace das {
                 "excepted to see an ExprCallMacro"
             );
             ptr = static_cast<ExprCallMacro *>(exprLooksLikeCall)->macro;
+            delete exprLooksLikeCall;
         }
         return *this;
     }
