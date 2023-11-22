@@ -8,6 +8,8 @@
 
 namespace das {
 
+    #pragma clang optimize off
+
     AstSerializer::AstSerializer ( ForReading, vector<uint8_t> && buffer_ ) : buffer(buffer_) {
         astModule = Module::require("ast");
         writing = false;

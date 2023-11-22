@@ -38,34 +38,6 @@ bool with_program_serialized ( F callback, ProgramPtr program ) {
     return callback(program);
 }
 
-StandaloneContextNode * StandaloneContextNode::head = nullptr;
-
-bool run_all_standalone_context_tests () {
-    vector<Context *> contexts;
-    while ( auto h = StandaloneContextNode::head ) {
-        StandaloneContextNode::head = h->tail;
-        contexts.push_back(h->regFn());
-    }
-    bool res = true;
-    for ( auto context : contexts ) {
-        auto fn_tests = context->findFunctions("test");
-        DAS_ASSERTF(!fn_tests.empty(), "expected to see test inside a testing context");
-        for ( auto fn_test: fn_tests ) {
-            bool result = cast<bool>::to(context->eval(fn_test, nullptr));
-            if ( auto ex = context->getException() ) {
-                tout << "exception: " << ex << "\n";
-                res = false;
-            }
-            if ( !result ) {
-                tout << "failed\n";
-                res = false;
-            }
-        }
-
-    }
-    return res;
-}
-
 bool compilation_fail_test ( const string & fn, bool, bool ) {
     uint64_t timeStamp = ref_time_ticks();
     tout << fn << " ";
@@ -294,7 +266,7 @@ bool run_tests( const string & path, bool (*test_fn)(const string &, bool useAot
         while ((ent = readdir (dir)) != NULL) {
             const char * atDas = strstr(ent->d_name,".das");
             if ( atDas && strcmp(atDas,".das")==0 && ent->d_name[0]!='_' ) {
-                ok = test_fn(path + "/" + ent->d_name, useAot, useSer) && ok;
+                ok = test_fn(path + "/" + ent->d_name, useAot) && ok;
             }
         }
         closedir (dir);
@@ -537,7 +509,6 @@ int main( int argc, char * argv[] ) {
 #endif
     uint64_t timeStamp = ref_time_ticks();
     bool ok = true;
-    // ok = run_all_standalone_context_tests() && ok;
     ok = run_compilation_fail_tests(getDasRoot() + "/examples/test/compilation_fail_tests") && ok;
     ok = run_unit_tests(getDasRoot() +  "/examples/test/unit_tests",    true,  false) && ok;
     ok = run_unit_tests(getDasRoot() +  "/examples/test/optimizations", false, false) && ok;
@@ -548,6 +519,15 @@ int main( int argc, char * argv[] ) {
     ok = run_module_test(getDasRoot() +  "/examples/test/module/alias",  "main.das", true, false) && ok;
     ok = run_module_test(getDasRoot() +  "/examples/test/module/cdp",    "main.das", true, false) && ok;
     ok = run_module_test(getDasRoot() +  "/examples/test/module/unsafe", "main.das", true, false) && ok;
+// now with serialization
+    ok = run_unit_tests(getDasRoot() +  "/examples/test/unit_tests",    false, true) && ok;
+    ok = run_unit_tests(getDasRoot() +  "/examples/test/optimizations", false, true) && ok;
+    ok = run_module_test(getDasRoot() +  "/examples/test/module", "main.das",        true, true) && ok;
+    ok = run_module_test(getDasRoot() +  "/examples/test/module", "main_inc.das",    true, true)  && ok;
+    ok = run_module_test(getDasRoot() +  "/examples/test/module", "main_default.das", false, true) && ok;
+    ok = run_module_test(getDasRoot() +  "/examples/test/module/alias",  "main.das", true, true) && ok;
+    ok = run_module_test(getDasRoot() +  "/examples/test/module/cdp",    "main.das", true, true) && ok;
+    ok = run_module_test(getDasRoot() +  "/examples/test/module/unsafe", "main.das", true, true) && ok;
     int usec = get_time_usec(timeStamp);
     tout << "TESTS " << (ok ? "PASSED " : "FAILED!!! ") << ((usec/1000)/1000.0) << "\n";
     // shutdown

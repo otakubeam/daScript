@@ -46,15 +46,22 @@ void tutorial () {
         return;
     }
 // serialize
+    printf("Hello world");
     AstSerializer ser;
     program->serialize(ser);
     program.reset();
 // deserialize
     AstSerializer deser ( ForReading{}, move(ser.buffer) );
+    ser.~AstSerializer();
     auto new_program = make_smart<Program>();
     new_program->serialize(deser);
     program = new_program;
-
+    program.reset();
+    auto * new_program_ptr = new_program.get();
+    (void)new_program_ptr;
+    new_program.reset();
+    deser.~AstSerializer();
+    return;
     // create daScript context
     Context ctx(program->getContextStackSize());
     if ( !program->simulate(ctx, tout) ) {
@@ -102,8 +109,9 @@ int main( int, char * [] ) {
     // shut-down daScript, free all memory
     Module::Shutdown();
 #if DAS_SMART_PTR_TRACKER
+    TextPrinter tp;
+    printf("%d", int(g_smart_ptr_total));
     if ( g_smart_ptr_total ) {
-        TextPrinter tp;
         tp << "smart pointers leaked: " << uint64_t(g_smart_ptr_total) << "\n";
 #if DAS_SMART_PTR_ID
         tp << "leaked ids:";
